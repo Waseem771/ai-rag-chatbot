@@ -1,15 +1,27 @@
 ﻿import Groq from 'groq-sdk';
 import config from '../config.js';
 
-const client = new Groq({
-  apiKey: config.groqApiKey,
-});
+// Lazy initialize client - only create when needed
+let client = null;
+
+function getClient() {
+  if (!client) {
+    if (!config.groqApiKey) {
+      throw new Error('GROQ_API_KEY environment variable is not set');
+    }
+    client = new Groq({
+      apiKey: config.groqApiKey,
+    });
+  }
+  return client;
+}
 
 /**
  * Generate a response using Groq with the given context
  */
 export async function generateResponse(query, context, conversationHistory = []) {
   try {
+    const groqClient = getClient();
     const systemPrompt = buildSystemPrompt(context);
 
     const messages = [
@@ -24,7 +36,7 @@ export async function generateResponse(query, context, conversationHistory = [])
       },
     ];
 
-    const response = await client.chat.completions.create({
+    const response = await groqClient.chat.completions.create({
       model: config.groqModel,
       max_tokens: config.maxTokens || 2048,
       messages,
@@ -34,7 +46,7 @@ export async function generateResponse(query, context, conversationHistory = [])
     });
 
     let responseText = response.choices[0]?.message?.content || '';
-    
+
     // Remove thinking tags if present
     responseText = responseText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
