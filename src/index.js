@@ -20,21 +20,34 @@ app.use(express.json());
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Initialize storage (file or database)
-console.log(`\n🔧 Storage Mode: ${config.storageMode.toUpperCase()}`);
-if (config.useDatabase) {
-  console.log('🗄️  Initializing PostgreSQL storage...');
-  try {
-    await initializePostgres();
-  } catch (error) {
-    console.warn('⚠️  PostgreSQL initialization failed:', error.message);
-    console.warn('Falling back to file-based storage...');
-    await initializeDataDirectory();
+// Initialize storage on first request
+let storageInitialized = false;
+
+app.use(async (req, res, next) => {
+  if (!storageInitialized) {
+    try {
+      console.log(`\n🔧 Storage Mode: ${config.storageMode.toUpperCase()}`);
+      if (config.useDatabase) {
+        console.log('🗄️  Initializing PostgreSQL storage...');
+        try {
+          await initializePostgres();
+        } catch (error) {
+          console.warn('⚠️  PostgreSQL initialization failed:', error.message);
+          console.warn('Falling back to file-based storage...');
+          await initializeDataDirectory();
+        }
+      } else {
+        console.log('📄 Initializing file-based storage...');
+        await initializeDataDirectory();
+      }
+      storageInitialized = true;
+    } catch (error) {
+      console.error('Failed to initialize storage:', error);
+      return res.status(500).json({ error: 'Storage initialization failed' });
+    }
   }
-} else {
-  console.log('📄 Initializing file-based storage (local development)...');
-  await initializeDataDirectory();
-}
+  next();
+});
 
 // API Routes
 app.use('/api/documents', documentRoutes);
@@ -94,14 +107,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(config.port, () => {
-  console.log(`\n🚀 RAG Chatbot v3.1.0 running on http://localhost:${config.port}`);
-  console.log(`🌐 Open http://localhost:${config.port} in your browser`);
-  console.log(`📁 File upload: PDF, Word (.docx), Text files supported`);
-  console.log(`Environment: ${config.nodeEnv}`);
-  console.log(`Model: ${config.groqModel}`);
-  console.log(`Storage: ${config.useDatabase ? 'PostgreSQL' : 'File-based'}\n`);
-});
+// Start server only in local development mode
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(config.port, () => {
+    console.log(`\n🚀 RAG Chatbot v3.1.0 running on http://localhost:${config.port}`);
+    console.log(`🌐 Open http://localhost:${config.port} in your browser`);
+    console.log(`📁 File upload: PDF, Word (.docx), Text files supported`);
+    console.log(`Environment: ${config.nodeEnv}`);
+    console.log(`Model: ${config.groqModel}`);
+    console.log(`Storage: ${config.useDatabase ? 'PostgreSQL' : 'File-based'}\n`);
+  });
+}
 
 export default app;
