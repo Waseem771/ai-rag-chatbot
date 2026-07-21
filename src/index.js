@@ -6,7 +6,6 @@ import { fileURLToPath } from 'url';
 import config from './config.js';
 import documentRoutes from './api/routes/documents.js';
 import chatRoutes from './api/routes/chat.js';
-import { initializeDataDirectory } from './utils/storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -18,38 +17,6 @@ app.use(express.json());
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, '../public')));
-
-// Storage initialization flag
-let storageInitialized = false;
-
-// Initialize storage once on first request
-const initializeStorage = async () => {
-  if (storageInitialized) return;
-
-  try {
-    console.log(`\n🔧 Storage Mode: ${config.storageMode.toUpperCase()}`);
-    console.log('📄 Initializing file-based storage...');
-    await initializeDataDirectory();
-    storageInitialized = true;
-    console.log('✅ Storage initialized successfully');
-  } catch (error) {
-    console.error('❌ Failed to initialize storage:', error);
-    throw error;
-  }
-};
-
-// Lazy initialization middleware
-app.use(async (req, res, next) => {
-  try {
-    if (!storageInitialized) {
-      await initializeStorage();
-    }
-    next();
-  } catch (error) {
-    console.error('Storage initialization error:', error);
-    return res.status(500).json({ error: 'Storage initialization failed', details: error.message });
-  }
-});
 
 // API Routes
 app.use('/api/documents', documentRoutes);
