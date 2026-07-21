@@ -27,9 +27,9 @@ if (config.useDatabase) {
   try {
     await initializePostgres();
   } catch (error) {
-    console.error('❌ Failed to initialize PostgreSQL:', error.message);
-    console.error('Make sure DATABASE_URL is set and the database is accessible.');
-    process.exit(1);
+    console.warn('⚠️  PostgreSQL initialization failed:', error.message);
+    console.warn('Falling back to file-based storage...');
+    await initializeDataDirectory();
   }
 } else {
   console.log('📄 Initializing file-based storage (local development)...');
