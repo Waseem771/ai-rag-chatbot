@@ -6,8 +6,18 @@ import { fileURLToPath } from 'url';
 import config from './config.js';
 import documentRoutes from './api/routes/documents.js';
 import chatRoutes from './api/routes/chat.js';
+import { initializeDataDirectorySync } from './utils/storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Initialize storage synchronously at module load time
+try {
+  initializeDataDirectorySync();
+  console.log('✅ Storage initialized');
+} catch (error) {
+  console.error('❌ Storage init failed:', error);
+}
+
 const app = express();
 
 // Middleware
@@ -18,7 +28,7 @@ app.use(express.json());
 // Serve static files
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Health check (no storage needed)
+// Health check
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',

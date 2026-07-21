@@ -1,6 +1,30 @@
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import config from '../config.js';
+
+// Synchronous initialization for Vercel
+export function initializeDataDirectorySync() {
+  try {
+    const dataDir = path.dirname(config.dbPath);
+    if (!fsSync.existsSync(dataDir)) {
+      fsSync.mkdirSync(dataDir, { recursive: true });
+    }
+
+    // Initialize documents file
+    if (!fsSync.existsSync(config.dbPath)) {
+      fsSync.writeFileSync(config.dbPath, JSON.stringify({ documents: [] }, null, 2));
+    }
+
+    // Initialize embeddings file
+    if (!fsSync.existsSync(config.embeddingsPath)) {
+      fsSync.writeFileSync(config.embeddingsPath, JSON.stringify({ embeddings: {} }, null, 2));
+    }
+  } catch (error) {
+    console.error('Failed to initialize data directory:', error);
+    throw error;
+  }
+}
 
 // Ensure data directory exists
 export async function initializeDataDirectory() {
@@ -13,7 +37,7 @@ export async function initializeDataDirectory() {
     if (!dbExists) {
       await fs.writeFile(config.dbPath, JSON.stringify({ documents: [] }, null, 2));
     }
-    
+
     const embExists = await fileExists(config.embeddingsPath);
     if (!embExists) {
       await fs.writeFile(config.embeddingsPath, JSON.stringify({ embeddings: {} }, null, 2));
