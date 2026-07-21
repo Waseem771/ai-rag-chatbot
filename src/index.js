@@ -7,7 +7,6 @@ import config from './config.js';
 import documentRoutes from './api/routes/documents.js';
 import chatRoutes from './api/routes/chat.js';
 import { initializeDataDirectory } from './utils/storage.js';
-import { initializePostgres } from './storage/postgres.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -20,33 +19,36 @@ app.use(express.json());
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Initialize storage on first request
+// Storage initialization flag
 let storageInitialized = false;
 
-app.use(async (req, res, next) => {
-  if (!storageInitialized) {
-    try {
-      console.log(`\n🔧 Storage Mode: ${config.storageMode.toUpperCase()}`);
-      if (config.useDatabase) {
-        console.log('🗄️  Initializing PostgreSQL storage...');
-        try {
-          await initializePostgres();
-        } catch (error) {
-          console.warn('⚠️  PostgreSQL initialization failed:', error.message);
-          console.warn('Falling back to file-based storage...');
-          await initializeDataDirectory();
-        }
-      } else {
-        console.log('📄 Initializing file-based storage...');
-        await initializeDataDirectory();
-      }
-      storageInitialized = true;
-    } catch (error) {
-      console.error('Failed to initialize storage:', error);
-      return res.status(500).json({ error: 'Storage initialization failed' });
-    }
+// Initialize storage once on first request
+const initializeStorage = async () => {
+  if (storageInitialized) return;
+
+  try {
+    console.log(`\n🔧 Storage Mode: ${config.storageMode.toUpperCase()}`);
+    console.log('📄 Initializing file-based storage...');
+    await initializeDataDirectory();
+    storageInitialized = true;
+    console.log('✅ Storage initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize storage:', error);
+    throw error;
   }
-  next();
+};
+
+// Lazy initialization middleware
+app.use(async (req, res, next) => {
+  try {
+    if (!storageInitialized) {
+      await initializeStorage();
+    }
+    next();
+  } catch (error) {
+    console.error('Storage initialization error:', error);
+    return res.status(500).json({ error: 'Storage initialization failed', details: error.message });
+  }
 });
 
 // API Routes
