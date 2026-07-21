@@ -9,6 +9,8 @@ import chatRoutes from './api/routes/chat.js';
 import { initializeDataDirectory } from './utils/storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Create and export app immediately (no top-level await)
 const app = express();
 
 // Middleware
@@ -19,14 +21,22 @@ app.use(express.json());
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Initialize storage before routes
-await initializeDataDirectory();
+// Storage initialization flag
+let storageReady = false;
 
-// API Routes
-app.use('/api/documents', documentRoutes);
-app.use('/api/chat', chatRoutes);
+// Initialize storage once
+const initStorage = async () => {
+  if (storageReady) return;
+  try {
+    await initializeDataDirectory();
+    storageReady = true;
+  } catch (error) {
+    console.error('Storage init error:', error);
+    throw error;
+  }
+};
 
-// Health check
+// Health check (doesn't require storage)
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -34,6 +44,23 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Initialize storage before processing requests
+app.use(async (req, res, next) => {
+  try {
+    if (!storageReady) {
+      await initStorage();
+    }
+    next();
+  } catch (error) {
+    console.error('Storage error:', error);
+    res.status(500).json({ error: 'Storage initialization failed' });
+  }
+});
+
+// API Routes
+app.use('/api/documents', documentRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Serve index.html for root path
 app.get('/', (req, res) => {
@@ -56,7 +83,7 @@ app.get('/api', (req, res) => {
     },
     endpoints: {
       documents: {
-        create: 'POST /api/documents (supports file upload)',
+        create: 'POST /api/documents',
         list: 'GET /api/documents',
         get: 'GET /api/documents/:id',
         update: 'PUT /api/documents/:id',
@@ -64,8 +91,7 @@ app.get('/api', (req, res) => {
       },
       chat: {
         query: 'POST /api/chat',
-        history: 'GET /api/chat/:conversationId',
-        delete: 'DELETE /api/chat/:conversationId'
+        history: 'GET /api/chat/:conversationId'
       }
     }
   });
@@ -80,19 +106,13 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server only in local development mode (not on Vercel)
+// Start server only in local development
 if (process.env.NODE_ENV !== 'production') {
   app.listen(config.port, () => {
     console.log(`\n🚀 RAG Chatbot v3.1.0 running on http://localhost:${config.port}`);
-    console.log(`🌐 Open http://localhost:${config.port} in your browser`);
-    console.log(`📁 File upload: Word (.docx), Text files supported`);
-    console.log(`Environment: ${config.nodeEnv}`);
-    console.log(`Model: ${config.groqModel}`);
-    console.log(`Storage: File-based\n`);
   });
 }
 
-// Export the Express app for Vercel
 export default app;
 
 // API Routes
