@@ -21,32 +21,34 @@ router.post('/', upload.single('file'), async (req, res, next) => {
     // If file is uploaded, extract text from it
     if (req.file) {
       try {
-        const fileInfo = getFileInfo(req.file.path);
-        title = title || fileInfo.name.replace(fileInfo.type, '').trim();
-        
+        title = title || req.file.originalname.replace(path.extname(req.file.originalname), '').trim();
+
         console.log('=== FILE UPLOAD DEBUG ===');
         console.log('Original filename:', req.file.originalname);
-        console.log('File path:', req.file.path);
         console.log('File mimetype:', req.file.mimetype);
         console.log('File size:', req.file.size);
-        
-        const ext = path.extname(req.file.path).toLowerCase();
-        console.log('Detected extension from path:', ext);
-        
-        const extFromOriginal = path.extname(req.file.originalname).toLowerCase();
-        console.log('Extension from originalname:', extFromOriginal);
+
+        const ext = path.extname(req.file.originalname).toLowerCase();
+        console.log('Extension from originalname:', ext);
         console.log('======================');
-        
-        content = await extractTextFromFile(req.file.path);
-        
+
+        // Handle memory storage - extract from buffer
+        if (req.file.buffer) {
+          content = await extractTextFromFile(req.file.buffer, req.file.mimetype, ext);
+        } else if (req.file.path) {
+          // Fallback for disk storage
+          content = await extractTextFromFile(req.file.path);
+          // Delete the uploaded file after extraction
+          if (fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+          }
+        }
+
         console.log('Extracted content length:', content.length);
         console.log('Extracted content preview:', content.substring(0, 100));
-        
-        // Delete the uploaded file after extraction
-        fs.unlinkSync(req.file.path);
       } catch (error) {
         // Clean up the file if extraction failed
-        if (fs.existsSync(req.file.path)) {
+        if (req.file.path && fs.existsSync(req.file.path)) {
           fs.unlinkSync(req.file.path);
         }
         throw new Error(`File processing failed: ${error.message}`);

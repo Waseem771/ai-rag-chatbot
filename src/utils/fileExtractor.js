@@ -3,39 +3,60 @@ import path from 'path';
 import mammoth from 'mammoth';
 
 /**
- * Extract text from uploaded file
+ * Extract text from uploaded file (supports both file path and buffer)
  */
-export async function extractTextFromFile(filePath) {
+export async function extractTextFromFile(fileInput, mimeType, ext) {
   try {
-    let ext = path.extname(filePath).toLowerCase();
     let text = '';
 
-    if (ext === '.pdf') {
-      throw new Error('PDF support is temporarily unavailable. Please upload a .txt or .docx file instead.');
-    } else if (ext === '.docx') {
-      text = await extractFromDocx(filePath);
-    } else if (ext === '.doc') {
-      text = await extractFromDocx(filePath);
-    } else if (ext === '.txt') {
-      text = fs.readFileSync(filePath, 'utf-8');
-    } else if (!ext || ext === '') {
-      // No extension - try to read as text file first
-      try {
-        text = fs.readFileSync(filePath, 'utf-8');
-        if (text.length > 0) {
-          return text.trim();
-        }
-      } catch (e) {
-        throw new Error('Could not read file as text');
+    // Determine extension if not provided
+    if (!ext) {
+      ext = typeof fileInput === 'string' ? path.extname(fileInput).toLowerCase() : '';
+    }
+
+    // Handle buffer input (from memory storage)
+    if (Buffer.isBuffer(fileInput)) {
+      if (ext === '.pdf') {
+        throw new Error('PDF support is temporarily unavailable. Please upload a .txt or .docx file instead.');
+      } else if (ext === '.docx' || ext === '.doc') {
+        text = await extractFromDocxBuffer(fileInput);
+      } else if (ext === '.txt' || !ext) {
+        text = fileInput.toString('utf-8');
+      } else {
+        throw new Error('Unsupported file format: ' + ext);
+      }
+    }
+    // Handle file path input (from disk storage)
+    else if (typeof fileInput === 'string') {
+      if (ext === '.pdf') {
+        throw new Error('PDF support is temporarily unavailable. Please upload a .txt or .docx file instead.');
+      } else if (ext === '.docx' || ext === '.doc') {
+        text = await extractFromDocx(fileInput);
+      } else if (ext === '.txt' || !ext) {
+        text = fs.readFileSync(fileInput, 'utf-8');
+      } else {
+        throw new Error('Unsupported file format: ' + ext);
       }
     } else {
-      throw new Error('Unsupported file format: ' + ext);
+      throw new Error('Invalid file input');
     }
 
     return text.trim();
   } catch (error) {
     console.error('Error extracting text from file:', error);
     throw error;
+  }
+}
+
+/**
+ * Extract text from Word document buffer (.docx or .doc)
+ */
+async function extractFromDocxBuffer(buffer) {
+  try {
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
+  } catch (error) {
+    throw new Error('Failed to extract text from Word document: ' + error.message);
   }
 }
 
